@@ -6,28 +6,6 @@ from math import isinf
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d.axes3d as p3
 
-def random_quaternion(rand=None):
-    """Return uniform random unit quaternion.
-    rand: array like or None
-        Three independent random variables that are uniformly distributed
-        between 0 and 1.
-    >>> q = random_quaternion()
-    >>> q = random_quaternion(numpy.random.random(3))
-    >>> len(q.shape), q.shape[0]==4
-    (1, True)
-    """
-    if rand is None:
-        rand = np.random.rand(3)
-    else:
-        assert len(rand) == 3
-    r1 = np.sqrt(1.0 - rand[0])
-    r2 = np.sqrt(rand[0])
-    pi2 = np.pi * 2.0
-    t1 = pi2 * rand[1]
-    t2 = pi2 * rand[2]
-    return np.array([np.cos(t2)*r2, np.sin(t1)*r1,
-                        np.cos(t1)*r1, np.sin(t2)*r2])
-
 
 def quaternion_about_axis(angle, axis):
     """Return quaternion for rotation about axis.
@@ -60,19 +38,6 @@ def quaternion_matrix(quaternion):
         [    q[1, 3]-q[2, 0],     q[2, 3]+q[1, 0], 1.0-q[1, 1]-q[2, 2], 0.0],
         [                0.0,                 0.0,                 0.0, 1.0]])
 
-def euclidean_dist(vec1, vec2):
-    # function returns the euclidean distance between two inhomogeenous n-dimensional points
-    if vec1.shape != vec2.shape:
-        print "Error: cannot calculate euclidean distance between two vectors of differing size"
-        return
-    diff = vec1 - vec2
-    # print "diff", diff, vec1, vec2
-    square_diffs = np.dot(diff, diff)
-    # print "square_diffs", square_diffs
-    dist = np.sqrt(np.sum(square_diffs))
-    return dist
-
-
 
 def normalize_homogenous_coordinate(np_array):
     # the input np.array should have columns that are homogenous n-vectors
@@ -87,21 +52,12 @@ def normalize_homogenous_coordinate(np_array):
             print np_array[:,col]
     return np_array
 
-def is_normalized(np_array):
-    # Returns true if the last element of every column is equal to 1
-    last_row = np_array.shape[0] - 1
-    cols = np_array.shape[1]
-    all_ones = True
-    for col in range(cols):
-        if np_array[last_row, col] != 1:
-            all_ones = False
-    return all_ones
-
-
+    
 def update_camera_matrix(display=True):
     # This function will calculate a camera matrix for a camera aiming at the origin from a given position
     global camera_matrix, camera_x, camera_y, camera_z, f, px, py, camera_pose_visual_pts, cube_pts, ax
     cam_center = np.array([[camera_x, camera_y, camera_z]])
+    print 'Camera Pose: ', cam_center
     z_axis = np.array([[0,0,1]])
     rot_axis = np.cross(z_axis, cam_center) # DBG removed cam_center negative
     # print np.vdot(z_axis, cam_center)
@@ -160,26 +116,8 @@ def update_camera_matrix(display=True):
     # print 'camera_matrix: \n', camera_matrix
     if display == True:
         display3D()
-    perspective_camera()
+    # perspective_camera()
 
-
-def tf_cube_points(display=True):
-    global tf_matrix, cube_pts, cube_tf_pts, pts_at_infinity, pts_at_inf_tf, ax, colors
-    # Apply transform to cube
-    cube_tf_pts = np.dot(tf_matrix, cube_pts)
-    # Make cube points homogenous
-    cube_tf_pts = normalize_homogenous_coordinate(cube_tf_pts)
-    # Apply transform to points at infinity
-    pts_at_inf_tf = np.dot(tf_matrix, pts_at_infinity)
-    # Make points at infinity homogenous
-    for col in range(pts_at_inf_tf.shape[1]):     # avoid division by zero when making homogenous
-        if pts_at_inf_tf[3, col] == 0:
-            pts_at_inf_tf[3, col] = 0.00001
-    pts_at_inf_tf = normalize_homogenous_coordinate(pts_at_inf_tf)
-    # print "pts_at_inf_tf\n", pts_at_inf_tf
-    if display == True:
-        display3D()
-    perspective_camera()
 
 
 def display3D():
@@ -264,129 +202,6 @@ def display3D():
             ax.lines.pop(0)
     
 
-
-def perspective_camera():
-    global camera_matrix, cube_pts, cube_tf_pts, pts_at_inf_tf, colors, px, py
-    cube_img_pts = np.dot(camera_matrix, cube_tf_pts)
-    if not is_normalized(cube_img_pts):
-        cube_img_pts = normalize_homogenous_coordinate(cube_img_pts)
-    # for i in range(cube_img_pts.shape[1]):
-    #     cube_img_pts[0,i] = cube_img_pts[0,i] / cube_img_pts[2,i]
-    #     cube_img_pts[1,i] = cube_img_pts[1,i] / cube_img_pts[2,i]
-    # print "img points after for loop\n", cube_img_pts[:,0]
-    cube_img_pts = cube_img_pts[[0,1],:]
-    # print cube_img_pts
-    # print "shape", cube_img_pts.shape
-    img_shape = (200,200,3)
-    img = np.ones(img_shape)
-    img = img*255
-    for i in range(cube_img_pts.shape[1]):
-        # print "color", colors[i]
-        x = cube_img_pts[0, i]
-        y = cube_img_pts[1, i]
-        if isinf(x) or isinf(y):
-            continue
-        # img_point = (10*(-px + int(x)), 10*(-py + int(y))
-        img_point = (int(100 * x) + img_shape[1]/2, int(100 * y) + img_shape[0]/2)
-        cv2.circle(img, img_point, 3, colors[i], -1) #colors[i]
-
-    for pt1 in range(8):
-            for pt2 in range(8):
-                if abs(euclidean_dist(cube_pts[0:3,pt1], cube_pts[0:3,pt2]) - 2.0) > 0.1:
-                    continue
-                else:
-                    x1 = int(100*cube_img_pts[0, pt1]) + img_shape[1]/2
-                    y1 = int(100*cube_img_pts[1, pt1]) + img_shape[0]/2
-                    x2 = int(100*cube_img_pts[0, pt2]) + img_shape[1]/2
-                    y2 = int(100*cube_img_pts[1, pt2]) + img_shape[0]/2
-                    if isinf(cube_img_pts[0, pt1]) or isinf(cube_img_pts[1, pt1]) or isinf(cube_img_pts[0, pt2]) or isinf(cube_img_pts[1, pt2]):
-                        continue
-                    line_return = cv2.line(img, (x1, y1), (x2, y2), (0, 0, 0), 1, 4)
-    cv2.imshow("Camera Position Control and Image", img)
-
-
-
-def cb1(value):
-    global tf_matrix
-    tf_matrix[0,0] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb2(value):
-    global tf_matrix
-    tf_matrix[0,1] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb3(value):
-    global tf_matrix
-    tf_matrix[0,2] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb4(value):
-    global tf_matrix
-    tf_matrix[0,3] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb5(value):
-    global tf_matrix
-    tf_matrix[1,0] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb6(value):
-    global tf_matrix
-    tf_matrix[1,1] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb7(value):
-    global tf_matrix
-    tf_matrix[1,2] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb8(value):
-    global tf_matrix
-    tf_matrix[1,3] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb9(value):
-    global tf_matrix
-    tf_matrix[2,0] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb10(value):
-    global tf_matrix
-    tf_matrix[2,1] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb11(value):
-    global tf_matrix
-    tf_matrix[2,2] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb12(value):
-    global tf_matrix
-    tf_matrix[2,3] = ( value - (slider_max*0.5)) / 10.0
-    tf_cube_points()
-
-def cb13(value):
-    global tf_matrix
-    tf_matrix[3,0] = ( value - (slider_max*0.5)) /50.0
-    tf_cube_points()
-
-def cb14(value):
-    global tf_matrix
-    tf_matrix[3,1] = ( value - (slider_max*0.5)) /50.0
-    tf_cube_points()
-
-def cb15(value):
-    global tf_matrix
-    tf_matrix[3,2] = ( value - (slider_max*0.5)) /50.0
-    tf_cube_points()
-
-def cb16(value):
-    global tf_matrix
-    tf_matrix[3,3] = 1 + ( value - (slider_max*0.5)) /50.0
-    tf_cube_points()
-
-
 def cam_cbx(value):
     global camera_x
     camera_x = (value-50)/5.0
@@ -401,9 +216,6 @@ def cam_cbz(value):
     global camera_z
     camera_z = (value-50)/5.0
     update_camera_matrix()
-
-
-
 
 # Global Geometric Objects
 tf_matrix = np.array([                   # 4x4 homogenous tf matrix
@@ -428,27 +240,9 @@ camera_pose_visual_pts = np.ones_like(cube_pts)
 cube_tf_pts = np.ones_like(cube_pts)
 pts_at_inf_tf = np.ones_like(pts_at_infinity)
 
-
 # User Inteface
 slider_max = 100
 slider_start = slider_max / 2
-cv2.namedWindow("Transformation Matrix Controls")
-cv2.createTrackbar("m1", "Transformation Matrix Controls", slider_start, slider_max, cb1)
-cv2.createTrackbar("m2", "Transformation Matrix Controls", slider_start, slider_max, cb2)
-cv2.createTrackbar("m3", "Transformation Matrix Controls", slider_start, slider_max, cb3)
-cv2.createTrackbar("m4", "Transformation Matrix Controls", slider_start, slider_max, cb4)
-cv2.createTrackbar("m5", "Transformation Matrix Controls", slider_start, slider_max, cb5)
-cv2.createTrackbar("m6", "Transformation Matrix Controls", slider_start, slider_max, cb6)
-cv2.createTrackbar("m7", "Transformation Matrix Controls", slider_start, slider_max, cb7)
-cv2.createTrackbar("m8", "Transformation Matrix Controls", slider_start, slider_max, cb8)
-cv2.createTrackbar("m9", "Transformation Matrix Controls", slider_start, slider_max, cb9)
-cv2.createTrackbar("m10", "Transformation Matrix Controls", slider_start, slider_max, cb10)
-cv2.createTrackbar("m11", "Transformation Matrix Controls", slider_start, slider_max, cb11)
-cv2.createTrackbar("m12", "Transformation Matrix Controls", slider_start, slider_max, cb12)
-cv2.createTrackbar("m13", "Transformation Matrix Controls", slider_start, slider_max, cb13)
-cv2.createTrackbar("m14", "Transformation Matrix Controls", slider_start, slider_max, cb14)
-cv2.createTrackbar("m15", "Transformation Matrix Controls", slider_start, slider_max, cb15)
-cv2.createTrackbar("m16", "Transformation Matrix Controls", slider_start, slider_max, cb16)
 cv2.namedWindow("Camera Position Control and Image")
 cv2.createTrackbar("camera_x", "Camera Position Control and Image", slider_start, slider_max, cam_cbx)
 cv2.createTrackbar("camera_y", "Camera Position Control and Image", slider_start, slider_max, cam_cby)
@@ -476,7 +270,7 @@ f = 1    # focal length
 px = 0  # principal point offset in x
 py = 0  # principal point offset in y
 update_camera_matrix(False)
-tf_cube_points(False)
+# tf_cube_points(False)
 display3D()
 
 cv2.waitKey(0)
